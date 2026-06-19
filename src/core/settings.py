@@ -2,7 +2,6 @@ from functools import lru_cache
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
-from src.utils.env_variables import get_env_variable_value
 
 class Settings(BaseSettings):
     version: str = "1.0.3"
@@ -13,6 +12,19 @@ class Settings(BaseSettings):
     console_log_level: str = Field(
         default="INFO",
         validation_alias=AliasChoices("CONSOLE_LOG_LEVEL"),
+    )
+
+    download_dir: Path = Field(
+        default=Path(".artifacts/downloads"),
+        validation_alias=AliasChoices("DOWNLOAD_DIR"),
+    )
+    scrapy_concurrent_requests: int = Field(
+        default=8,
+        validation_alias=AliasChoices("SCRAPY_CONCURRENT_REQUESTS"),
+    )
+    scrapy_download_delay: float = Field(
+        default=0.25,
+        validation_alias=AliasChoices("SCRAPY_DOWNLOAD_DELAY"),
     ) 
     
     model_config = SettingsConfigDict(

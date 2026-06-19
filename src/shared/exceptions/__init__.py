@@ -1,5 +1,5 @@
 from .app_error import AppError
-from .feature_errors import (
+from .scrapy_errors import (
     CaptchaDetectionError,
     CookiePopupError,
     FeatureError,
