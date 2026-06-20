@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 scrapy-etykiety = "src.scraper.runner:main"
+etykiety-gui = "src.gui:run_gui"
 
 [build-system]
 requires = ["hatchling"]

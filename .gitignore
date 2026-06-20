@@ -8,4 +8,5 @@ wheels/
 
 # Virtual environments
 .venv
-.artifacts/logs/
+.artifacts/logs
+.artifacts/downloads

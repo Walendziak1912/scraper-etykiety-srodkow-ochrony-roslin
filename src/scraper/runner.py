@@ -3,10 +3,10 @@ from pathlib import Path
 
 from scrapy.crawler import CrawlerProcess
 
-from src.core.settings import Settings, get_settings
+from src.core.settings import Settings, get_settings, resolve_download_dir
 from src.scraper import settings as scrapy_defaults
-from src.shared.model.job import JobParams
-from src.scraper import settings as scrapy_defaults
+from src.scraper.cancel import is_cancel_requested, reset_cancel
+from src.scraper.progress import DownloadEvent, emit
 from src.shared.model.job import JobParams
 
 
@@ -20,11 +20,16 @@ def build_scrapy_settings(
     app_settings: Settings | None = None,
 ) -> dict:
     app_settings = app_settings or get_settings()
-    download_dir = Path(app_settings.download_dir)
+    download_dir = resolve_download_dir(app_settings.download_dir)
+    if download_dir is None:
+        raise ValueError("DOWNLOAD_DIR nie jest ustawiony.")
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    manifest_path = _result_dir(job.result_path) / "manifest.jsonl"
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path = ""
+    if app_settings.manifest_enabled:
+        path = _result_dir(job.result_path) / "manifest.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path = str(path)
 
     return {
         "BOT_NAME": scrapy_defaults.BOT_NAME,
@@ -36,13 +41,36 @@ def build_scrapy_settings(
         "USER_AGENT": scrapy_defaults.USER_AGENT,
         "ITEM_PIPELINES": scrapy_defaults.ITEM_PIPELINES,
         "FILES_STORE": str(download_dir.resolve()),
-        "MANIFEST_PATH": str(manifest_path),
+        "MANIFEST_PATH": manifest_path,
         "LOG_LEVEL": "INFO",
+        "EXTENSIONS": {
+            "src.scraper.cancel.CancelControllerExtension": 50,
+        },
     }
 
 
-def run_scraper(job: JobParams, logger: logging.Logger | None = None) -> dict:
-    scrapy_settings = build_scrapy_settings(job)
+def run_scraper(
+    job: JobParams,
+    logger: logging.Logger | None = None,
+    *,
+    download_dir: Path | str | None = None,
+    track_progress: bool = False,
+) -> dict:
+    app_settings = get_settings()
+    if download_dir is not None:
+        app_settings = app_settings.model_copy(update={"download_dir": str(Path(download_dir))})
+
+    reset_cancel()
+
+    if track_progress:
+        emit(
+            DownloadEvent(
+                kind="started",
+                message=f"Rozpoczęto pobieranie etykiet PDF do: {resolve_download_dir(app_settings.download_dir)}",
+            )
+        )
+
+    scrapy_settings = build_scrapy_settings(job, app_settings)
     if logger:
         scrapy_settings["LOG_LEVEL"] = logging.getLevelName(logger.level)
 
@@ -52,28 +80,41 @@ def run_scraper(job: JobParams, logger: logging.Logger | None = None) -> dict:
     process.start()
 
     stats = crawler.stats.get_stats()
-    return {
+    result = {
         "item_scraped_count": stats.get("item_scraped_count", 0),
         "downloader/response_count": stats.get("downloader/response_count", 0),
         "file_status_count/downloaded": stats.get("file_status_count/downloaded", 0),
         "file_status_count/uptodate": stats.get("file_status_count/uptodate", 0),
         "log_count/ERROR": stats.get("log_count/ERROR", 0),
+        "cancelled": is_cancel_requested(),
     }
+
+    if track_progress:
+        if is_cancel_requested():
+            emit(
+                DownloadEvent(
+                    kind="cancelled",
+                    message="Pobieranie przerwane przez użytkownika.",
+                    stats=result,
+                )
+            )
+        else:
+            emit(
+                DownloadEvent(
+                    kind="finished",
+                    message="Pobieranie zakończone.",
+                    stats=result,
+                )
+            )
+
+    reset_cancel()
+    return result
 
 
 def main() -> None:
-    import uuid
-    from datetime import datetime
-
     from src.shared.model.job import set_job_params
 
-    today = datetime.now().strftime("%Y-%m-%d")
-    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    job = JobParams(
-        job_id=str(uuid.uuid4()),
-        log_path=f".artifacts/logs/{today}/{stamp}.log",
-        result_path=f".artifacts/logs/{today}/{stamp}/manifest.jsonl",
-    )
+    job = JobParams.create_default()
     set_job_params(job)
     stats = run_scraper(job)
     print(stats)
