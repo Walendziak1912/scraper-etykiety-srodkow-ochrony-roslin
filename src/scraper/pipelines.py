@@ -25,19 +25,6 @@ class EtykietyFilesPipeline(FilesPipeline):
     def process_item(self, item, spider):
         if is_cancel_requested():
             raise CloseSpider("cancelled")
-
-        if progress_enabled():
-            adapter = ItemAdapter(item)
-            range_slug = str(adapter.get("range") or "")
-            filename = str(adapter.get("filename") or "")
-            emit(
-                DownloadEvent(
-                    kind="downloading",
-                    range_slug=range_slug,
-                    filename=filename,
-                    message=f"Pobieranie [{range_slug}]: {filename}",
-                )
-            )
         return super().process_item(item, spider)
 
     def item_completed(self, results, item, info):
@@ -65,7 +52,17 @@ class EtykietyFilesPipeline(FilesPipeline):
             range_slug = str(adapter.get("range") or "")
             filename = str(adapter.get("filename") or "")
             if file_status == "uptodate":
-                message = f"Bez zmian (już na dysku): {full_path}"
+                message = ""
+            elif file_status == "downloaded":
+                message = f"Zapisano: {full_path}"
+                emit(
+                    DownloadEvent(
+                        kind="downloading",
+                        range_slug=range_slug,
+                        filename=filename,
+                        message=f"Pobieranie [{range_slug}]: {filename}",
+                    )
+                )
             else:
                 message = f"Zapisano: {full_path}"
             emit(

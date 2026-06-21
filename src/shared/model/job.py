@@ -1,10 +1,12 @@
 from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import logging
 import os
 import uuid
+
+from src.shared.enums import LogType
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +15,10 @@ class JobParams(BaseModel):
     job_id: str
     log_path: str
     result_path: str
+    log_types: list[LogType] = Field(
+        default_factory=lambda: [LogType.CONSOLE]
+        #default_factory=lambda: [LogType.CONSOLE, LogType.FILE]
+    )
 
     @field_validator("log_path", "result_path", mode="before")
     @classmethod

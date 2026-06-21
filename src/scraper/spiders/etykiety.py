@@ -31,7 +31,7 @@ class EtykietySpider(scrapy.Spider):
             emit(
                 DownloadEvent(
                     kind="info",
-                    message=f"Znaleziono {len(links)} zakresów liter – skanowanie list plików…",
+                    message=f"Znaleziono {len(links)} zakresów",    
                 )
             )
         for href in links:

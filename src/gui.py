@@ -12,6 +12,9 @@ from src.utils.env_file import update_env_variable
 
 
 class ScraperGui:
+    _MAX_EVENTS_PER_POLL = 100
+    _UPTODATE_LOG_EVERY = 100
+
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("Etykiety SOR – pobieranie PDF")
@@ -84,7 +87,7 @@ class ScraperGui:
         main = ttk.Frame(self.root, padding=12)
         main.pack(fill=tk.BOTH, expand=True)
 
-        path_frame = ttk.LabelFrame(main, text="Katalog zapisu plików PDF (DOWNLOAD_DIR)", padding=8)
+        path_frame = ttk.LabelFrame(main, text="Katalog zapisu plików PDF", padding=8)
         path_frame.pack(fill=tk.X, pady=(0, 8))
 
         self.path_var = tk.StringVar(value=self._download_dir_display())
@@ -278,12 +281,19 @@ class ScraperGui:
                 return
             if event.status == "downloaded":
                 self.downloaded_count += 1
+                self._update_stats()
+                self._append_log(event.message)
             elif event.status == "uptodate":
                 self.uptodate_count += 1
+                self._update_stats()
+                if self.uptodate_count % self._UPTODATE_LOG_EVERY == 0:
+                    self._append_log(
+                        f"Sprawdzono {self.uptodate_count} plików bez zmian na dysku"
+                    )
             else:
                 self.failed_count += 1
-            self._update_stats()
-            self._append_log(event.message)
+                self._update_stats()
+                self._append_log(event.message)
             return
 
         if event.kind in {"finished", "cancelled"}:
@@ -307,13 +317,15 @@ class ScraperGui:
 
     def _poll_progress(self) -> None:
         progress_queue = self.runner.progress_queue
+        processed = 0
         if progress_queue is not None:
-            while True:
+            while processed < self._MAX_EVENTS_PER_POLL:
                 try:
                     event = progress_queue.get_nowait()
                 except queue.Empty:
                     break
                 self._handle_event(event)
+                processed += 1
 
         if (
             self._ui_busy
@@ -332,7 +344,8 @@ class ScraperGui:
                 )
             )
 
-        self.root.after(200, self._poll_progress)
+        delay_ms = 1 if processed >= self._MAX_EVENTS_PER_POLL else 200
+        self.root.after(delay_ms, self._poll_progress)
 
     def _on_close(self) -> None:
         if self.runner.is_running or self.runner.is_alive():
