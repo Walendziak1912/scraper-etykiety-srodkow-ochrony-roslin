@@ -1,7 +1,12 @@
 from argparse import Namespace
-from pydantic import BaseModel, ConfigDict, field_validator
+from datetime import datetime
+from pathlib import Path
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import logging
 import os
+import uuid
+
+from src.shared.enums import LogType
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +15,10 @@ class JobParams(BaseModel):
     job_id: str
     log_path: str
     result_path: str
+    log_types: list[LogType] = Field(
+        default_factory=lambda: [LogType.CONSOLE]
+        #default_factory=lambda: [LogType.CONSOLE, LogType.FILE]
+    )
 
     @field_validator("log_path", "result_path", mode="before")
     @classmethod
@@ -26,6 +35,19 @@ class JobParams(BaseModel):
             job_id=args.job_id,
             log_path=args.log_path,
             result_path=args.result_path,
+        )
+
+    @classmethod
+    def create_default(cls) -> "JobParams":
+        from src.core.settings import get_settings
+
+        logs_root = Path(get_settings().logs_dir)
+        today = datetime.now().strftime("%Y-%m-%d")
+        stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        return cls(
+            job_id=str(uuid.uuid4()),
+            log_path=str(logs_root / today / f"{stamp}.log"),
+            result_path=str(logs_root / today / stamp / "manifest.jsonl"),
         )
 
 

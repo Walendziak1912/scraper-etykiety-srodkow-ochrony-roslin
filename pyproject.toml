@@ -8,7 +8,12 @@ dependencies = [
     "opencv-python>=4.13.0.92",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.11.0",
+    "scrapy>=2.14",
 ]
+
+[project.scripts]
+scrapy-etykiety = "src.scraper.runner:main"
+etykiety-gui = "src.gui:run_gui"
 
 [build-system]
 requires = ["hatchling"]
